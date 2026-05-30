@@ -98,8 +98,29 @@ button[disabled] {
   z-index: 20;
 }
 
+@keyframes skeleton-shimmer {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton-shimmer {
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .feed-scroller {
     scroll-behavior: auto;
+  }
+
+  .skeleton-shimmer {
+    animation: none;
+    opacity: 0.6;
   }
 }

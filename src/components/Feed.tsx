@@ -4,6 +4,7 @@ import { log } from "../lib/log";
 import { TagSearchBar } from "./TagSearchBar";
 import { FeedControls } from "./FeedControls";
 import { FeedItem } from "./FeedItem";
+import { FeedSkeleton } from "./FeedSkeleton";
 
 const L = log("feed-ui");
 
@@ -21,22 +22,23 @@ type Props = {
 export function Feed({ posts, idx, liked, saved, loading, setActive, onLike, onSave }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const scrollLock = useRef(false);
+  const skeleton = !posts.length && loading;
 
   const snapTo = useCallback(
     (i: number) => {
       const el = scroller.current;
-      if (!el || i < 0 || i >= posts.length) return;
+      if (!el || skeleton || i < 0 || i >= posts.length) return;
       scrollLock.current = true;
       el.scrollTo({ top: i * el.clientHeight, behavior: "smooth" });
       setActive(i);
       setTimeout(() => (scrollLock.current = false), 400);
     },
-    [posts.length, setActive]
+    [posts.length, setActive, skeleton]
   );
 
   const onScroll = () => {
     const el = scroller.current;
-    if (!el || scrollLock.current) return;
+    if (!el || scrollLock.current || skeleton) return;
     const i = Math.round(el.scrollTop / el.clientHeight);
     if (i !== idx) {
       L.debug("scroll", { i, idx });
@@ -51,27 +53,40 @@ export function Feed({ posts, idx, liked, saved, loading, setActive, onLike, onS
       </header>
       <div class="feed-shell relative min-h-0 flex-1">
         <div ref={scroller} class="feed-scroller h-full w-full" onScroll={onScroll}>
-          {posts.map((p) => (
-            <div key={p.id} class="feed-slide h-full w-full shrink-0">
-              <FeedItem
-                post={p}
-                liked={liked.has(p.id)}
-                saved={saved.has(p.id)}
-                onLike={() => onLike(p)}
-                onSave={() => onSave(p)}
-              />
-            </div>
-          ))}
+          {skeleton ? (
+            <>
+              <div class="feed-slide h-full w-full shrink-0">
+                <FeedSkeleton />
+              </div>
+              <div class="feed-slide h-full w-full shrink-0">
+                <FeedSkeleton />
+              </div>
+            </>
+          ) : (
+            posts.map((p) => (
+              <div key={p.id} class="feed-slide h-full w-full shrink-0">
+                <FeedItem
+                  post={p}
+                  liked={liked.has(p.id)}
+                  saved={saved.has(p.id)}
+                  onLike={() => onLike(p)}
+                  onSave={() => onSave(p)}
+                />
+              </div>
+            ))
+          )}
         </div>
-        <FeedControls
-          idx={idx}
-          total={posts.length}
-          onPrev={() => snapTo(idx - 1)}
-          onNext={() => snapTo(idx + 1)}
-        />
-        {loading && (
+        {!skeleton && (
+          <FeedControls
+            idx={idx}
+            total={posts.length}
+            onPrev={() => snapTo(idx - 1)}
+            onNext={() => snapTo(idx + 1)}
+          />
+        )}
+        {loading && posts.length > 0 && (
           <div class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-zinc-900/90 px-3 py-1 text-xs text-zinc-300">
-            Loading...
+            Loading…
           </div>
         )}
       </div>

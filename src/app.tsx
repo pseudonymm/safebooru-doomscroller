@@ -12,14 +12,11 @@ export function App() {
   const feed = useFeed();
   useSession();
 
-  if (feed.phase === "boot")
-    return <div class="flex h-screen items-center justify-center bg-black text-zinc-500 text-sm">Loading...</div>;
-
   if (feed.phase === "search") return <TagSearch />;
 
   return (
     <AppShell view={view} onView={setView}>
-      {view === "home" && (
+      {(feed.phase === "boot" || view === "home") && (
         <Feed
           posts={feed.posts}
           idx={feed.idx}
@@ -31,8 +28,8 @@ export function App() {
           onSave={feed.onSave}
         />
       )}
-      {view === "saved" && <SavedPage />}
-      {view === "stats" && <StatsPage />}
+      {feed.phase !== "boot" && view === "saved" && <SavedPage />}
+      {feed.phase !== "boot" && view === "stats" && <StatsPage />}
     </AppShell>
   );
 }

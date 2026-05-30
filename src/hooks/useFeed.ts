@@ -6,7 +6,8 @@ import { mergePosts } from "../lib/feedBuffer";
 import { fetchByTag, pickTag } from "../lib/fetchRotator";
 import { log } from "../lib/log";
 import { ignore, like, parseTags, resumeRec, trackSeen, unlike, type RecState } from "../lib/recommendation";
-import { hasStoredFeed, loadBuffer, loadLiked, syncFeed } from "../lib/store";
+import { saveBuffer } from "../lib/store/buffer";
+import { hasStoredFeed, loadLiked, syncFeed } from "../lib/store";
 import { loadSaved, toggleSaved } from "../lib/store/saved";
 import { bumpStat } from "../lib/store/stats";
 import { markVisited } from "../lib/store/visited";
@@ -73,12 +74,14 @@ export const useFeed = () => {
     async (filterTags: string[], reset: boolean) => {
       watch.current = filterTags;
       setLoading(true);
-      const batch = await listPosts({ tags: orTagQuery(filterTags), limit: FETCH_LIMIT });
-      trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       if (reset) {
+        setPosts([]);
         ids.current.clear();
         setIdx(0);
+        lastViewed.current = -1;
       }
+      const batch = await listPosts({ tags: orTagQuery(filterTags), limit: FETCH_LIMIT });
+      trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       const buf = mergePosts([], batch, rec.current, ids.current);
       setPosts(buf);
       setPhase("feed");
@@ -90,17 +93,17 @@ export const useFeed = () => {
   );
 
   const loadBootstrap = useCallback(
-    async (seeds: string[], reset: boolean) => {
+    async (seeds: string[]) => {
       watch.current = [];
       setLoading(true);
+      setPosts([]);
+      ids.current.clear();
+      setIdx(0);
+      lastViewed.current = -1;
       const batch = seeds.length
         ? await listPosts({ tags: orTagQuery(seeds), limit: FETCH_LIMIT })
         : await fetchByTag(pickTag(rec.current));
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
-      if (reset) {
-        ids.current.clear();
-        setIdx(0);
-      }
       const buf = mergePosts([], batch, rec.current, ids.current);
       setPosts(buf);
       setPhase("feed");
@@ -122,29 +125,25 @@ export const useFeed = () => {
       likedR.current = liked;
       setLikedIds(new Set(liked));
 
-      if (urlTags.length) {
-        L.info("bootWatch", { tags: urlTags });
-        await loadFiltered(urlTags, true);
-        return;
-      }
-      if (!hasStoredFeed()) {
+      if (!urlTags.length && !hasStoredFeed()) {
         setPhase("search");
         return;
       }
-      const buf = loadBuffer();
-      if (buf.length) {
-        buf.forEach((p) => ids.current.add(p.id));
-        setPosts(buf);
-        setPhase("feed");
-        L.info("resume", { posts: buf.length });
-        refill(0, buf);
+
+      saveBuffer([]);
+      setPhase("feed");
+      setLoading(true);
+      L.info("bootFresh");
+
+      if (urlTags.length) {
+        await loadFiltered(urlTags, true);
         return;
       }
       const snap = resumeRec();
       const seeds = snap.seeds.length
         ? snap.seeds
         : [...snap.weights.entries()].slice(0, 3).map(([t]) => t);
-      seeds.length ? await loadBootstrap(seeds, false) : setPhase("search");
+      seeds.length ? await loadBootstrap(seeds) : setPhase("search");
     })();
   }, [loadFiltered, loadBootstrap, refill]);
 

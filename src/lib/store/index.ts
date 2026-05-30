@@ -1,6 +1,6 @@
 import type { Post } from "../../types/fetcher";
 import type { RecState } from "../recommendation";
-import { loadBuffer, saveBuffer } from "./buffer";
+import { saveBuffer } from "./buffer";
 import { saveLiked } from "./liked";
 import { hasRec, saveRec } from "./rec";
 
@@ -12,7 +12,7 @@ export * from "./saved";
 export * from "./visited";
 export * from "./stats";
 
-export const hasStoredFeed = () => loadBuffer().length > 0 || hasRec();
+export const hasStoredFeed = () => hasRec();
 
 export const syncFeed = (rec: RecState, posts: Post[], liked: Iterable<number>) => {
   saveRec(rec);
