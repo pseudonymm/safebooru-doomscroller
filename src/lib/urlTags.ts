@@ -1,7 +1,7 @@
 import { log } from "./log";
 import { resumeRec, searchBoost } from "./recommendation";
 
-const L = log("url");
+const L = log("url-tags");
 
 export const tagsFromUrl = (): string[] => {
   if (typeof location === "undefined") return [];

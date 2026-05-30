@@ -18,7 +18,7 @@ import {
   type RecState,
 } from "../lib/recommendation";
 
-const L = log("feed");
+const L = log("feed-engine");
 
 const syncPersist = (s: RecState, posts: Post[], liked: Set<number>) =>
   persistRec(s, { posts, liked: [...liked] });

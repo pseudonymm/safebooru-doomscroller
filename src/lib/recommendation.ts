@@ -2,7 +2,7 @@ import type { Post } from "../types/fetcher";
 import { IGNORE_D, LIKE_D, SEARCH_D, STORAGE_KEY, MAX_PERSIST_POSTS } from "./config";
 import { log } from "./log";
 
-const L = log("rec");
+const L = log("recommendation-engine");
 
 export type RecState = {
   weights: Map<string, number>;

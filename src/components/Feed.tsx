@@ -5,7 +5,7 @@ import { TagSearchBar } from "./TagSearchBar";
 import { FeedControls } from "./FeedControls";
 import { FeedItem } from "./FeedItem";
 
-const L = log("ui");
+const L = log("feed-ui");
 
 type Props = {
   posts: Post[];
