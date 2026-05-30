@@ -1,0 +1,35 @@
+flowchart TD
+  start([You open the app]) --> first{First visit or<br/>saved taste?}
+  first -->|brand new| search[Search for tags you like]
+  first -->|link has tags| pinned[Load posts matching<br/>those exact tags]
+  first -->|returning user| warm[Load posts from<br/>your starter interests]
+  search --> pinned
+
+  pinned --> sort
+  warm --> sort
+  more --> sort
+
+  sort[Drop duplicates · sort by<br/>how well tags match you ·<br/>push already-seen posts down] --> queue
+
+  subgraph scrolling["While you scroll"]
+    queue[(Posts queued ahead —<br/>about 10 ready to view)]
+    look[You view a post]
+    queue --> look --> choice{What did you do?}
+    choice -->|liked| up[Tags on that post<br/>score higher]
+    choice -->|unliked| down[Those tags score lower]
+    choice -->|scrolled past after ~2s<br/>without liking| soft[Tags dip slightly]
+    search --> interest[Search tells the app<br/>what you care about]
+    interest --> taste
+    up --> taste
+    down --> taste
+    soft --> taste
+    taste[(Your taste profile —<br/>tag scores, history, favorites<br/>saved on this device)]
+  end
+
+  taste --> mode{Still filtering<br/>by search tags?}
+  mode -->|yes| pinned
+  mode -->|no — free browse| pick[Pick what to fetch next]
+  pick -->|most of the time ~7/8| fav[Choose a tag you<br/>already like — by popularity]
+  pick -->|sometimes ~1/8| try[Choose a tag you saw<br/>but barely engaged with]
+  fav --> more[Fetch a batch of new posts]
+  try --> more
