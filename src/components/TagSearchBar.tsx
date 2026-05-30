@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { Search, X } from "lucide-react";
 import { autocomplete } from "../lib/fetcher.server";
 import { log } from "../lib/log";
-import { applyTagSearch, tagsFromUrl } from "../lib/urlTags";
+import { applyTagSearch, removeUrlTag, tagsFromUrl } from "../lib/urlTags";
 
 const L = log("search");
 const DEBOUNCE_MS = 250;
@@ -23,6 +23,23 @@ const Highlight = ({ label, q }: { label: string; q: string }) => {
     </>
   );
 };
+
+const TagBadge = ({ tag, onRemove }: { tag: string; onRemove: () => void }) => (
+  <span class="inline-flex items-center gap-0.5 rounded-full bg-zinc-800 pl-2.5 pr-1 py-0.5 text-xs text-zinc-200">
+    {tag}
+    <button
+      type="button"
+      aria-label={`Remove ${tag}`}
+      class="rounded p-0.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-100"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}
+    >
+      <X size={12} />
+    </button>
+  </span>
+);
 
 export function TagSearchBar({ compact, loading }: Props) {
   const active = tagsFromUrl();
@@ -59,8 +76,8 @@ export function TagSearchBar({ compact, loading }: Props) {
     return () => clearTimeout(t.current);
   }, [q]);
 
-  const pick = (tag: string) => {
-    const v = tag.trim().toLowerCase();
+  const appendTag = (raw: string) => {
+    const v = raw.trim().toLowerCase();
     if (!v) return;
     if (compact) return applyTagSearch([v], true);
     if (!tags.includes(v)) setTags([...tags, v]);
@@ -69,30 +86,38 @@ export function TagSearchBar({ compact, loading }: Props) {
   };
 
   const submit = () => {
-    const all = [...tags, ...(q.trim() ? [q.trim()] : [])];
+    const pending = q.trim().toLowerCase();
+    const all = [...new Set([...tags, ...(pending ? [pending] : [])])];
     if (!all.length) return applyTagSearch([]);
     L.info("submit", all);
-    applyTagSearch(all, false);
+    applyTagSearch(all, compact);
   };
 
   const open = !!q.trim() && (hintLoad || hints.length > 0);
+  const showActive = compact ? active : tags;
 
   return (
     <div class={compact ? "relative w-full" : "relative w-full max-w-md"}>
-      {compact && active.length > 0 && (
+      {showActive.length > 0 && (
         <div class="mb-2 flex flex-wrap items-center gap-1.5">
-          {active.map((t) => (
-            <span key={t} class="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs text-zinc-200">
-              {t}
-            </span>
+          {showActive.map((t) => (
+            <TagBadge
+              key={t}
+              tag={t}
+              onRemove={() =>
+                compact ? removeUrlTag(t) : setTags(tags.filter((x) => x !== t))
+              }
+            />
           ))}
-          <button
-            type="button"
-            class="text-xs text-zinc-500 hover:text-zinc-300"
-            onClick={() => applyTagSearch([])}
-          >
-            Clear
-          </button>
+          {compact && (
+            <button
+              type="button"
+              class="text-xs text-zinc-500 hover:text-zinc-300"
+              onClick={() => applyTagSearch([])}
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
       <div class="relative">
@@ -106,14 +131,13 @@ export function TagSearchBar({ compact, loading }: Props) {
           class={`w-full rounded-xl border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 ${
             compact ? "py-2 pr-3 pl-10" : "py-2.5 pr-4 pl-10"
           }`}
-          placeholder={compact && active.length ? active.join(" ") : "Search tags…"}
+          placeholder="Search tags…"
           value={q}
           autoComplete="off"
           onInput={(e) => setQ((e.target as HTMLInputElement).value)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
-            if (hints[0]) pick(hints[0].value);
-            else if (compact) applyTagSearch(q.trim() ? [q.trim()] : [], true);
+            if (hints[0]) appendTag(hints[0].value);
             else submit();
           }}
         />
@@ -128,7 +152,7 @@ export function TagSearchBar({ compact, loading }: Props) {
                 <button
                   type="button"
                   class="w-full px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
-                  onClick={() => pick(h.value)}
+                  onClick={() => appendTag(h.value)}
                 >
                   <Highlight label={h.label} q={q.trim()} />
                 </button>
@@ -136,18 +160,6 @@ export function TagSearchBar({ compact, loading }: Props) {
             ))
           )}
         </ul>
-      )}
-      {!compact && tags.length > 0 && (
-        <div class="mt-2 flex flex-wrap gap-2">
-          {tags.map((t) => (
-            <span key={t} class="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-3 py-1 text-xs text-zinc-200">
-              {t}
-              <button type="button" aria-label={`Remove ${t}`} onClick={() => setTags(tags.filter((x) => x !== t))}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
       )}
       {!compact && (
         <button

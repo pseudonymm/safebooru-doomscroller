@@ -1,4 +1,5 @@
 import type { AutocompleteItem, ListPostsParams, Post } from "../types/fetcher";
+import { FetchEmptyError } from "./fetchErrors.ts";
 import { log } from "./log.ts";
 
 const BASE_URL = `https://safebooru.org`;
@@ -16,38 +17,39 @@ const qs = (p: object) =>
     )
   ).toString();
 
-/**
- * List posts from Safebooru public API.
- * @param params - The parameters for the list posts.
- * @returns The list of posts.
- */
+const parsePostJson = async (res: Response): Promise<Post[]> => {
+  const text = await res.text();
+  if (!text.trim()) return [];
+  try {
+    const data = JSON.parse(text);
+    return Array.isArray(data) ? (data as Post[]) : [];
+  } catch {
+    L.warn("parsePostJson: invalid or truncated JSON");
+    throw new FetchEmptyError();
+  }
+};
+
 export async function listPosts(params: ListPostsParams): Promise<Post[]> {
-  L.info(`listPosts: ${API_URL}?${qs({ page: "dapi", s: "post", q: "index", ...params, json: 1 })}`);
-  const res = await fetch(`${API_URL}?${qs({ page: "dapi", s: "post", q: "index", ...params, json: 1 })}`);
+  const url = `${API_URL}?${qs({ page: "dapi", s: "post", q: "index", ...params, json: 1 })}`;
+  L.info(`listPosts: ${url}`);
+  const res = await fetch(url);
   if (!res.ok) {
     L.error(`listPosts: ${res.status} ${res.statusText}`);
     throw new Error(`listPosts: ${res.status} ${res.statusText}`);
   }
-  L.info(`listPosts: ${res.status} ${res.statusText}`);
-  const data = await res.json() as Post[];
+  const data = await parsePostJson(res);
   L.info(`listPosts: ${data.length} posts`);
   return data;
 }
 
-/**
- * Autocomplete tags from Safebooru public API.
- * @param q - The query to autocomplete.
- * @returns The list of autocomplete items.
- */
 export async function autocomplete(q: string): Promise<AutocompleteItem[]> {
-  L.info(`autocomplete: ${AUTOCOMPLETE_URL}?${new URLSearchParams({ q })}`);
   const res = await fetch(`${AUTOCOMPLETE_URL}?${new URLSearchParams({ q })}`);
-  if (!res.ok) {
-    L.error(`autocomplete: ${res.status} ${res.statusText}`);
-    throw new Error(`autocomplete: ${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(`autocomplete: ${res.status}`);
+  const text = await res.text();
+  if (!text.trim()) return [];
+  try {
+    return JSON.parse(text) as AutocompleteItem[];
+  } catch {
+    return [];
   }
-  L.info(`autocomplete: ${res.status} ${res.statusText}`);
-  const data = await res.json() as AutocompleteItem[];
-  L.info(`autocomplete: ${data.length} items`);
-  return data;
 }

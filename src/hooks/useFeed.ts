@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { Post } from "../types/fetcher";
 import { FETCH_LIMIT, IGNORE_MS, PREFETCH } from "../lib/config";
+import { FetchEmptyError } from "../lib/fetchErrors";
 import { listPosts } from "../lib/fetcher.server";
 import { mergePosts } from "../lib/feedBuffer";
 import { fetchByTag, pickTag } from "../lib/fetchRotator";
@@ -11,7 +12,7 @@ import { hasStoredFeed, loadLiked, syncFeed } from "../lib/store";
 import { loadSaved, toggleSaved } from "../lib/store/saved";
 import { bumpStat } from "../lib/store/stats";
 import { markVisited } from "../lib/store/visited";
-import { orTagQuery } from "../lib/tagQuery";
+import { andTagQuery, orTagQuery } from "../lib/tagQuery";
 import { tagsFromUrl } from "../lib/urlTags";
 
 const L = log("feed-engine");
@@ -22,6 +23,7 @@ export const useFeed = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [likedIds, setLikedIds] = useState(() => loadLiked());
   const [savedIds, setSavedIds] = useState(() => new Set(loadSaved().map((p) => p.id)));
   const likedR = useRef(loadLiked());
@@ -43,7 +45,7 @@ export const useFeed = () => {
   const fetchBatch = useCallback(async () => {
     const q = watch.current;
     return q.length
-      ? listPosts({ tags: orTagQuery(q), limit: FETCH_LIMIT })
+      ? listPosts({ tags: andTagQuery(q), limit: FETCH_LIMIT })
       : fetchByTag(pickTag(rec.current));
   }, []);
 
@@ -74,20 +76,40 @@ export const useFeed = () => {
     async (filterTags: string[], reset: boolean) => {
       watch.current = filterTags;
       setLoading(true);
+      setSearchError(null);
       if (reset) {
         setPosts([]);
         ids.current.clear();
         setIdx(0);
         lastViewed.current = -1;
       }
-      const batch = await listPosts({ tags: orTagQuery(filterTags), limit: FETCH_LIMIT });
-      trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
-      const buf = mergePosts([], batch, rec.current, ids.current);
-      setPosts(buf);
-      setPhase("feed");
-      sync();
-      setLoading(false);
-      refill(0, buf);
+      try {
+        const batch = await listPosts({ tags: andTagQuery(filterTags), limit: FETCH_LIMIT });
+        if (!batch.length) {
+          setSearchError("No posts match these tags. Try fewer tags or different combinations.");
+          setPosts([]);
+          setPhase("feed");
+          setLoading(false);
+          return;
+        }
+        trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
+        const buf = mergePosts([], batch, rec.current, ids.current);
+        setPosts(buf);
+        setPhase("feed");
+        sync();
+        setLoading(false);
+        refill(0, buf);
+      } catch (e) {
+        const msg =
+          e instanceof FetchEmptyError
+            ? "No posts match this search — tags may contradict or not exist together."
+            : "Search failed. Try again.";
+        L.warn("loadFiltered", e);
+        setSearchError(msg);
+        setPosts([]);
+        setPhase("feed");
+        setLoading(false);
+      }
     },
     [refill, sync]
   );
@@ -233,5 +255,5 @@ export const useFeed = () => {
     return () => clearTimeout(dwellT.current);
   }, [idx, phase, armDwell]);
 
-  return { phase, posts, idx, loading, setActive, onLike, onSave, likedIds, savedIds };
+  return { phase, posts, idx, loading, searchError, setActive, onLike, onSave, likedIds, savedIds };
 };

@@ -27,3 +27,8 @@ export const applyTagSearch = (incoming: string[], append = false) => {
   }
   setUrlTags(tags);
 };
+
+export const removeUrlTag = (tag: string) => {
+  const t = tag.trim().toLowerCase();
+  setUrlTags(tagsFromUrl().filter((x) => x !== t));
+};

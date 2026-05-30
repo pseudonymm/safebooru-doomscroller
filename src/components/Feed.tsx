@@ -14,15 +14,17 @@ type Props = {
   liked: Set<number>;
   saved: Set<number>;
   loading: boolean;
+  searchError: string | null;
   setActive: (i: number) => void;
   onLike: (p: Post) => void;
   onSave: (p: Post) => void;
 };
 
-export function Feed({ posts, idx, liked, saved, loading, setActive, onLike, onSave }: Props) {
+export function Feed({ posts, idx, liked, saved, loading, searchError, setActive, onLike, onSave }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const scrollLock = useRef(false);
-  const skeleton = !posts.length && loading;
+  const skeleton = !posts.length && loading && !searchError;
+  const empty = !posts.length && !loading && searchError;
 
   const snapTo = useCallback(
     (i: number) => {
@@ -53,7 +55,11 @@ export function Feed({ posts, idx, liked, saved, loading, setActive, onLike, onS
       </header>
       <div class="feed-shell relative min-h-0 flex-1">
         <div ref={scroller} class="feed-scroller h-full w-full" onScroll={onScroll}>
-          {skeleton ? (
+          {empty ? (
+            <div class="feed-slide flex h-full w-full shrink-0 items-center justify-center px-8">
+              <p class="max-w-md text-center text-sm text-zinc-400">{searchError}</p>
+            </div>
+          ) : skeleton ? (
             <>
               <div class="feed-slide h-full w-full shrink-0">
                 <FeedSkeleton />

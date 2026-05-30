@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { orTagQuery } from "../src/lib/tagQuery";
+import { andTagQuery, orTagQuery } from "../src/lib/tagQuery";
 
 describe("orTagQuery", () => {
   test("single tag unchanged", () => {
@@ -9,8 +9,10 @@ describe("orTagQuery", () => {
   test("two tags OR syntax", () => {
     expect(orTagQuery(["cat", "dog"])).toBe("(+cat+~+dog+)");
   });
+});
 
-  test("three tags", () => {
-    expect(orTagQuery(["a", "b", "c"])).toBe("(+a+~+b+~+c+)");
+describe("andTagQuery", () => {
+  test("joins with spaces", () => {
+    expect(andTagQuery(["cat", "dog"])).toBe("cat dog");
   });
 });

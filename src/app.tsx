@@ -23,6 +23,7 @@ export function App() {
           liked={feed.likedIds}
           saved={feed.savedIds}
           loading={feed.loading}
+          searchError={feed.searchError}
           setActive={feed.setActive}
           onLike={feed.onLike}
           onSave={feed.onSave}
