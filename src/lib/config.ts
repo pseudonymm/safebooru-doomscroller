@@ -1,0 +1,9 @@
+export const IGNORE_MS = 2500;
+export const PREFETCH = 10;
+export const DISCOVERY_P = 1 / 8;
+export const LIKE_D = 1;
+export const SEARCH_D = 5;
+export const MAX_PERSIST_POSTS = 60;
+export const IGNORE_D = 0.1;
+export const FETCH_LIMIT = 40;
+export const STORAGE_KEY = "sbd-state";

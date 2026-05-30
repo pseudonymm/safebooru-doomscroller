@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { autocomplete, listPosts } from "../src/lib/fetcher";
+import { autocomplete, listPosts } from "../src/lib/fetcher.server";
 import type { AutocompleteItem, Post } from "../src/types/fetcher";
 
 const post = { id: 1 } as Post;
