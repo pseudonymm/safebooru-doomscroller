@@ -10,6 +10,7 @@ import { hasStoredFeed, loadBuffer, loadLiked, syncFeed } from "../lib/store";
 import { loadSaved, toggleSaved } from "../lib/store/saved";
 import { bumpStat } from "../lib/store/stats";
 import { markVisited } from "../lib/store/visited";
+import { orTagQuery } from "../lib/tagQuery";
 import { tagsFromUrl } from "../lib/urlTags";
 
 const L = log("feed-engine");
@@ -41,7 +42,7 @@ export const useFeed = () => {
   const fetchBatch = useCallback(async () => {
     const q = watch.current;
     return q.length
-      ? listPosts({ tags: q.join(" "), limit: FETCH_LIMIT })
+      ? listPosts({ tags: orTagQuery(q), limit: FETCH_LIMIT })
       : fetchByTag(pickTag(rec.current));
   }, []);
 
@@ -72,7 +73,7 @@ export const useFeed = () => {
     async (filterTags: string[], reset: boolean) => {
       watch.current = filterTags;
       setLoading(true);
-      const batch = await listPosts({ tags: filterTags.join(" "), limit: FETCH_LIMIT });
+      const batch = await listPosts({ tags: orTagQuery(filterTags), limit: FETCH_LIMIT });
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       if (reset) {
         ids.current.clear();
@@ -93,7 +94,7 @@ export const useFeed = () => {
       watch.current = [];
       setLoading(true);
       const batch = seeds.length
-        ? await listPosts({ tags: seeds.join(" "), limit: FETCH_LIMIT })
+        ? await listPosts({ tags: orTagQuery(seeds), limit: FETCH_LIMIT })
         : await fetchByTag(pickTag(rec.current));
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       if (reset) {

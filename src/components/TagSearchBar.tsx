@@ -18,7 +18,7 @@ const Highlight = ({ label, q }: { label: string; q: string }) => {
   return (
     <>
       {label.slice(0, i)}
-      <mark class="rounded-sm bg-yellow-400/90 px-0.5 text-zinc-900">{label.slice(i, i + q.length)}</mark>
+      <mark class="rounded-sm bg-amber-500/40 px-0.5 text-amber-100">{label.slice(i, i + q.length)}</mark>
       {label.slice(i + q.length)}
     </>
   );
@@ -103,7 +103,7 @@ export function TagSearchBar({ compact, loading }: Props) {
           <Search size={16} strokeWidth={2} />
         </span>
         <input
-          class={`w-full rounded-xl border border-zinc-800 bg-zinc-900 text-sm outline-none focus:border-zinc-600 ${
+          class={`w-full rounded-xl border border-zinc-800 bg-zinc-900 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-zinc-600 ${
             compact ? "py-2 pr-3 pl-10" : "py-2.5 pr-4 pl-10"
           }`}
           placeholder={compact && active.length ? active.join(" ") : "Search tags…"}
@@ -119,7 +119,7 @@ export function TagSearchBar({ compact, loading }: Props) {
         />
       </div>
       {open && (
-        <ul class="absolute top-full right-0 left-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-100 text-zinc-900 shadow-xl">
+        <ul class="absolute top-full right-0 left-0 z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-200 shadow-xl shadow-black/50">
           {hintLoad && !hints.length ? (
             <li class="px-3 py-2 text-sm text-zinc-500">Searching…</li>
           ) : (
@@ -127,7 +127,7 @@ export function TagSearchBar({ compact, loading }: Props) {
               <li key={h.value}>
                 <button
                   type="button"
-                  class="w-full px-3 py-1.5 text-left text-sm hover:bg-yellow-100"
+                  class="w-full px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
                   onClick={() => pick(h.value)}
                 >
                   <Highlight label={h.label} q={q.trim()} />
@@ -153,7 +153,7 @@ export function TagSearchBar({ compact, loading }: Props) {
         <button
           type="button"
           disabled={loading || (!tags.length && !q.trim())}
-          class="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-semibold text-zinc-950 disabled:opacity-40"
+          class="mt-4 w-full rounded-xl border border-zinc-600 bg-zinc-800 py-2.5 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
           onClick={submit}
         >
           {loading ? "Loading..." : "Start doomscrolling"}
