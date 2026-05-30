@@ -1,0 +1,1 @@
+// note: feed data are saved into localStorage and gzipped for storage efficiency
