@@ -49,6 +49,7 @@ export const bump = (s: RecState, tags: string[], d: number) => {
 };
 
 export const like = (s: RecState, tags: string[]) => bump(s, tags, LIKE_D);
+export const unlike = (s: RecState, tags: string[]) => bump(s, tags, -LIKE_D);
 export const ignore = (s: RecState, tags: string[]) => bump(s, tags, -IGNORE_D);
 export const searchBoost = (s: RecState, tags: string[]) => {
   tags.forEach((t) => {

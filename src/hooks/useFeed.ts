@@ -5,7 +5,7 @@ import { listPosts } from "../lib/fetcher.server";
 import { mergePosts } from "../lib/feedBuffer";
 import { fetchByTag, pickTag } from "../lib/fetchRotator";
 import { log } from "../lib/log";
-import { ignore, like, parseTags, resumeRec, trackSeen, type RecState } from "../lib/recommendation";
+import { ignore, like, parseTags, resumeRec, trackSeen, unlike, type RecState } from "../lib/recommendation";
 import { hasStoredFeed, loadBuffer, loadLiked, syncFeed } from "../lib/store";
 import { loadSaved, toggleSaved } from "../lib/store/saved";
 import { bumpStat } from "../lib/store/stats";
@@ -20,9 +20,9 @@ export const useFeed = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [likedIds, setLikedIds] = useState(() => new Set<number>());
+  const [likedIds, setLikedIds] = useState(() => loadLiked());
   const [savedIds, setSavedIds] = useState(() => new Set(loadSaved().map((p) => p.id)));
-  const likedR = useRef(new Set<number>());
+  const likedR = useRef(loadLiked());
   const rec = useRef<RecState>(resumeRec());
   const ids = useRef(new Set<number>());
   const postsRef = useRef(posts);
@@ -76,8 +76,6 @@ export const useFeed = () => {
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       if (reset) {
         ids.current.clear();
-        likedR.current.clear();
-        setLikedIds(new Set());
         setIdx(0);
       }
       const buf = mergePosts([], batch, rec.current, ids.current);
@@ -100,8 +98,6 @@ export const useFeed = () => {
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       if (reset) {
         ids.current.clear();
-        likedR.current.clear();
-        setLikedIds(new Set());
         setIdx(0);
       }
       const buf = mergePosts([], batch, rec.current, ids.current);
@@ -153,13 +149,20 @@ export const useFeed = () => {
 
   const onLike = useCallback(
     (p: Post) => {
-      if (likedR.current.has(p.id)) return;
-      likedR.current.add(p.id);
-      like(rec.current, parseTags(p.tags));
+      const tags = parseTags(p.tags);
+      if (likedR.current.has(p.id)) {
+        likedR.current.delete(p.id);
+        unlike(rec.current, tags);
+        bumpStat("liked", -1);
+        L.info("unlike", { id: p.id });
+      } else {
+        likedR.current.add(p.id);
+        like(rec.current, tags);
+        bumpStat("liked");
+        L.info("like", { id: p.id });
+      }
       setLikedIds(new Set(likedR.current));
-      bumpStat("liked");
       sync();
-      L.info("like", { id: p.id });
     },
     [sync]
   );

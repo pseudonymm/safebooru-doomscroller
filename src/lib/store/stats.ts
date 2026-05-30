@@ -27,7 +27,7 @@ export const saveStats = (s: Stats) => write(KEYS.stats, s);
 
 export const bumpStat = (k: keyof Omit<Stats, "sessionMs" | "since">, n = 1) => {
   const s = loadStats();
-  s[k] += n;
+  s[k] = Math.max(0, s[k] + n);
   saveStats(s);
 };
 

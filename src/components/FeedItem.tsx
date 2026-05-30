@@ -39,7 +39,7 @@ export function FeedItem({ post, liked, saved, onLike, onSave }: Props) {
       <div class="absolute right-4 bottom-24 flex flex-col gap-3">
         <button
           type="button"
-          aria-label="Like"
+          aria-label={liked ? "Unlike" : "Like"}
           class={`flex h-12 w-12 items-center justify-center rounded-full backdrop-blur transition ${
             liked ? "bg-rose-500/90 text-white" : "bg-black/40 text-white hover:bg-black/60"
           }`}
