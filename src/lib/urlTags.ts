@@ -1,5 +1,6 @@
 import { log } from "./log";
 import { resumeRec, searchBoost } from "./recommendation";
+import { bumpStat } from "./store/stats";
 
 const L = log("url-tags");
 
@@ -16,11 +17,13 @@ export const setUrlTags = (tags: string[]) => {
   location.assign(u.pathname + u.search);
 };
 
-/** Boost searched tags, then hard-refresh with `?tags=` in the URL (booru watch-style filter). */
 export const applyTagSearch = (incoming: string[], append = false) => {
   const add = incoming.map((t) => t.trim().toLowerCase()).filter(Boolean);
   const tags = append ? [...new Set([...tagsFromUrl(), ...add])] : add;
   if (!tags.length) return setUrlTags([]);
-  if (add.length) searchBoost(resumeRec(), add);
+  if (add.length) {
+    searchBoost(resumeRec(), add);
+    bumpStat("searches");
+  }
   setUrlTags(tags);
 };

@@ -156,7 +156,7 @@ export function TagSearchBar({ compact, loading }: Props) {
           class="mt-4 w-full rounded-xl bg-white py-2.5 text-sm font-semibold text-zinc-950 disabled:opacity-40"
           onClick={submit}
         >
-          {loading ? "Loading…" : "Start doomscrolling"}
+          {loading ? "Loading..." : "Start doomscrolling"}
         </button>
       )}
     </div>

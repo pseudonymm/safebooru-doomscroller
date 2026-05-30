@@ -1,4 +1,7 @@
 import type { Post } from "../types/fetcher";
+import { isVisited } from "./store/visited";
 
-export const dedupePosts = (posts: Post[], ids: Set<number>) =>
-  posts.filter((p) => !ids.has(p.id));
+export const pickIncoming = (posts: Post[], ids: Set<number>) => {
+  const fresh = posts.filter((p) => !ids.has(p.id) && !isVisited(p.id));
+  return fresh.length ? fresh : posts.filter((p) => !ids.has(p.id));
+};

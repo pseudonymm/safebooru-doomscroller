@@ -11,12 +11,14 @@ type Props = {
   posts: Post[];
   idx: number;
   liked: Set<number>;
+  saved: Set<number>;
   loading: boolean;
   setActive: (i: number) => void;
   onLike: (p: Post) => void;
+  onSave: (p: Post) => void;
 };
 
-export function Feed({ posts, idx, liked, loading, setActive, onLike }: Props) {
+export function Feed({ posts, idx, liked, saved, loading, setActive, onLike, onSave }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const scrollLock = useRef(false);
 
@@ -51,7 +53,13 @@ export function Feed({ posts, idx, liked, loading, setActive, onLike }: Props) {
         <div ref={scroller} class="feed-scroller h-full w-full" onScroll={onScroll}>
           {posts.map((p) => (
             <div key={p.id} class="feed-slide h-full w-full shrink-0">
-              <FeedItem post={p} liked={liked.has(p.id)} onLike={() => onLike(p)} />
+              <FeedItem
+                post={p}
+                liked={liked.has(p.id)}
+                saved={saved.has(p.id)}
+                onLike={() => onLike(p)}
+                onSave={() => onSave(p)}
+              />
             </div>
           ))}
         </div>
@@ -63,7 +71,7 @@ export function Feed({ posts, idx, liked, loading, setActive, onLike }: Props) {
         />
         {loading && (
           <div class="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-zinc-900/90 px-3 py-1 text-xs text-zinc-300">
-            Loading…
+            Loading...
           </div>
         )}
       </div>

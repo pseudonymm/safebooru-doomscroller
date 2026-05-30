@@ -1,6 +1,6 @@
-import type { Post } from "../types/fetcher";
-import { IGNORE_D, LIKE_D, SEARCH_D, STORAGE_KEY, MAX_PERSIST_POSTS } from "./config";
+import { IGNORE_D, LIKE_D, SEARCH_D } from "./config";
 import { log } from "./log";
+import { loadRecSnap, saveRec, toRec } from "./store/rec";
 
 const L = log("recommendation-engine");
 
@@ -10,17 +10,14 @@ export type RecState = {
   seeds: string[];
 };
 
-export type StoredState = {
-  weights: [string, number][];
-  seen: string[];
-  seeds: string[];
-  posts?: Post[];
-  liked?: number[];
-};
-
 export const parseTags = (s: string) => s.trim().split(/\s+/).filter(Boolean);
 
 export const w = (s: RecState, t: string) => s.weights.get(t) ?? 0;
+
+export const loadRec = (): RecState | null => {
+  const snap = loadRecSnap();
+  return snap ? toRec(snap) : null;
+};
 
 export const createRec = (seeds: string[] = []): RecState => {
   const s = loadRec() ?? { weights: new Map(), seen: new Set(), seeds };
@@ -36,6 +33,11 @@ export const createRec = (seeds: string[] = []): RecState => {
 };
 
 export const resumeRec = (): RecState => loadRec() ?? createRec();
+
+export const persistRec = (s: RecState) => {
+  saveRec(s);
+  L.debug("persist", { weights: s.weights.size });
+};
 
 export const bump = (s: RecState, tags: string[], d: number) => {
   tags.forEach((t) => {
@@ -90,43 +92,3 @@ export const coldTag = (s: RecState): string => {
   const pool = coldPool(s);
   return pool[Math.floor(Math.random() * pool.length)] ?? weightedTag(s);
 };
-
-export const hasStoredFeed = () => {
-  const s = loadStored();
-  if (!s) return false;
-  return (s.posts?.length ?? 0) > 0 || (s.seeds.length > 0 && s.weights.length > 0);
-};
-
-export const loadStored = (): StoredState | null => {
-  if (typeof localStorage === "undefined") return null;
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-  return JSON.parse(raw) as StoredState;
-};
-
-const loadRec = (): RecState | null => {
-  const o = loadStored();
-  if (!o) return null;
-  L.info("load", { weights: o.weights.length, seen: o.seen.length, posts: o.posts?.length ?? 0 });
-  return {
-    weights: new Map(o.weights),
-    seen: new Set(o.seen),
-    seeds: o.seeds ?? [],
-  };
-};
-
-export const persistRec = (s: RecState, extra?: { posts?: Post[]; liked?: number[] }) => {
-  if (typeof localStorage === "undefined") return;
-  const payload: StoredState = {
-    weights: [...s.weights],
-    seen: [...s.seen],
-    seeds: s.seeds,
-    posts: extra?.posts?.slice(-MAX_PERSIST_POSTS),
-    liked: extra?.liked,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  L.debug("persist", { weights: s.weights.size, posts: payload.posts?.length ?? 0 });
-};
-
-// legacy alias
-export const persist = persistRec;

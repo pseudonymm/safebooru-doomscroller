@@ -5,23 +5,14 @@ import { listPosts } from "../lib/fetcher.server";
 import { mergePosts } from "../lib/feedBuffer";
 import { fetchByTag, pickTag } from "../lib/fetchRotator";
 import { log } from "../lib/log";
+import { ignore, like, parseTags, resumeRec, trackSeen, type RecState } from "../lib/recommendation";
+import { hasStoredFeed, loadBuffer, loadLiked, syncFeed } from "../lib/store";
+import { loadSaved, toggleSaved } from "../lib/store/saved";
+import { bumpStat } from "../lib/store/stats";
+import { markVisited } from "../lib/store/visited";
 import { tagsFromUrl } from "../lib/urlTags";
-import {
-  hasStoredFeed,
-  ignore,
-  like,
-  loadStored,
-  parseTags,
-  persistRec,
-  resumeRec,
-  trackSeen,
-  type RecState,
-} from "../lib/recommendation";
 
 const L = log("feed-engine");
-
-const syncPersist = (s: RecState, posts: Post[], liked: Set<number>) =>
-  persistRec(s, { posts, liked: [...liked] });
 
 export const useFeed = () => {
   const watch = useRef(tagsFromUrl());
@@ -30,6 +21,7 @@ export const useFeed = () => {
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(false);
   const [likedIds, setLikedIds] = useState(() => new Set<number>());
+  const [savedIds, setSavedIds] = useState(() => new Set(loadSaved().map((p) => p.id)));
   const likedR = useRef(new Set<number>());
   const rec = useRef<RecState>(resumeRec());
   const ids = useRef(new Set<number>());
@@ -39,6 +31,12 @@ export const useFeed = () => {
   const dwellT = useRef<ReturnType<typeof setTimeout>>();
   const fetching = useRef(false);
   const booted = useRef(false);
+  const lastViewed = useRef(-1);
+
+  const sync = useCallback(
+    () => syncFeed(rec.current, postsRef.current, likedR.current),
+    []
+  );
 
   const fetchBatch = useCallback(async () => {
     const q = watch.current;
@@ -52,21 +50,23 @@ export const useFeed = () => {
     fetching.current = true;
     setLoading(true);
     let cur = buf;
+    let stall = 0;
     try {
-      while (cur.length - from < PREFETCH) {
+      while (cur.length - from < PREFETCH && stall < 6) {
         L.info("fetch", { watch: watch.current, buf: cur.length, from });
-        const batch = await fetchBatch();
-        cur = mergePosts(cur, batch, rec.current, ids.current);
+        const before = cur.length;
+        cur = mergePosts(cur, await fetchBatch(), rec.current, ids.current);
+        stall = cur.length === before ? stall + 1 : 0;
       }
       setPosts(cur);
-      syncPersist(rec.current, cur, likedR.current);
+      sync();
     } catch (e) {
       L.error("refill", e);
     } finally {
       fetching.current = false;
       setLoading(false);
     }
-  }, [fetchBatch]);
+  }, [fetchBatch, sync]);
 
   const loadFiltered = useCallback(
     async (filterTags: string[], reset: boolean) => {
@@ -83,11 +83,11 @@ export const useFeed = () => {
       const buf = mergePosts([], batch, rec.current, ids.current);
       setPosts(buf);
       setPhase("feed");
-      syncPersist(rec.current, buf, likedR.current);
+      sync();
       setLoading(false);
       refill(0, buf);
     },
-    [refill]
+    [refill, sync]
   );
 
   const loadBootstrap = useCallback(
@@ -107,11 +107,11 @@ export const useFeed = () => {
       const buf = mergePosts([], batch, rec.current, ids.current);
       setPosts(buf);
       setPhase("feed");
-      syncPersist(rec.current, buf, likedR.current);
+      sync();
       setLoading(false);
       refill(0, buf);
     },
-    [refill]
+    [refill, sync]
   );
 
   useEffect(() => {
@@ -121,48 +121,62 @@ export const useFeed = () => {
       const urlTags = tagsFromUrl();
       watch.current = urlTags;
       rec.current = resumeRec();
+      const liked = loadLiked();
+      likedR.current = liked;
+      setLikedIds(new Set(liked));
 
       if (urlTags.length) {
-        if (loadStored()?.liked?.length) {
-          likedR.current = new Set(loadStored()!.liked);
-          setLikedIds(new Set(loadStored()!.liked));
-        }
         L.info("bootWatch", { tags: urlTags });
         await loadFiltered(urlTags, true);
         return;
       }
-
       if (!hasStoredFeed()) {
         setPhase("search");
         return;
       }
-
-      const snap = loadStored()!;
-      if (snap.liked?.length) {
-        likedR.current = new Set(snap.liked);
-        setLikedIds(new Set(snap.liked));
-      }
-      if (snap.posts?.length) {
-        snap.posts.forEach((p) => ids.current.add(p.id));
-        setPosts(snap.posts);
+      const buf = loadBuffer();
+      if (buf.length) {
+        buf.forEach((p) => ids.current.add(p.id));
+        setPosts(buf);
         setPhase("feed");
-        L.info("resume", { posts: snap.posts.length });
-        refill(0, snap.posts);
+        L.info("resume", { posts: buf.length });
+        refill(0, buf);
         return;
       }
-      const seeds = snap.seeds.length ? snap.seeds : snap.weights.slice(0, 3).map(([t]) => t);
+      const snap = resumeRec();
+      const seeds = snap.seeds.length
+        ? snap.seeds
+        : [...snap.weights.entries()].slice(0, 3).map(([t]) => t);
       seeds.length ? await loadBootstrap(seeds, false) : setPhase("search");
     })();
   }, [loadFiltered, loadBootstrap, refill]);
 
-  const onLike = useCallback((p: Post) => {
-    if (likedR.current.has(p.id)) return;
-    likedR.current.add(p.id);
-    like(rec.current, parseTags(p.tags));
-    setLikedIds(new Set(likedR.current));
-    syncPersist(rec.current, postsRef.current, likedR.current);
-    L.info("like", { id: p.id });
-  }, []);
+  const onLike = useCallback(
+    (p: Post) => {
+      if (likedR.current.has(p.id)) return;
+      likedR.current.add(p.id);
+      like(rec.current, parseTags(p.tags));
+      setLikedIds(new Set(likedR.current));
+      bumpStat("liked");
+      sync();
+      L.info("like", { id: p.id });
+    },
+    [sync]
+  );
+
+  const onSave = useCallback(
+    (p: Post) => {
+      const added = toggleSaved(p);
+      setSavedIds((s) => {
+        const n = new Set(s);
+        added ? n.add(p.id) : n.delete(p.id);
+        return n;
+      });
+      if (added) bumpStat("saved");
+      L.info("save", { id: p.id, added });
+    },
+    []
+  );
 
   const leavePost = useCallback((prev: number, forward: boolean) => {
     clearTimeout(dwellT.current);
@@ -173,10 +187,12 @@ export const useFeed = () => {
     }
     if (dwellOk.current && !likedR.current.has(p.id)) {
       ignore(rec.current, parseTags(p.tags));
+      bumpStat("ignored");
+      sync();
       L.info("ignore", { id: p.id, prev });
     }
     dwellOk.current = false;
-  }, []);
+  }, [sync]);
 
   const armDwell = useCallback(() => {
     clearTimeout(dwellT.current);
@@ -201,9 +217,18 @@ export const useFeed = () => {
   );
 
   useEffect(() => {
+    if (phase !== "feed") return;
+    const p = postsRef.current[idx];
+    if (!p || p.id === lastViewed.current) return;
+    lastViewed.current = p.id;
+    markVisited(p.id);
+    bumpStat("viewed");
+  }, [phase, idx]);
+
+  useEffect(() => {
     if (phase === "feed") armDwell();
     return () => clearTimeout(dwellT.current);
   }, [idx, phase, armDwell]);
 
-  return { phase, posts, idx, loading, setActive, onLike, likedIds };
+  return { phase, posts, idx, loading, setActive, onLike, onSave, likedIds, savedIds };
 };
