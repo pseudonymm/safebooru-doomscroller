@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { scorePost } from "../src/lib/postScorer";
+import { scorePost } from "../lib/postScorer";
 import {
   bump,
   coldPool,
@@ -8,7 +8,7 @@ import {
   quartileThreshold,
   weightedTag,
   type RecState,
-} from "../src/lib/recommendation";
+} from "../lib/recommendation";
 
 const mk = (w: Record<string, number>, seen: string[] = []): RecState => ({
   weights: new Map(Object.entries(w)),

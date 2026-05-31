@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { andTagQuery, orTagQuery } from "../src/lib/tagQuery";
+import { andTagQuery, orTagQuery } from "../lib/tagQuery";
 
 describe("orTagQuery", () => {
   test("single tag unchanged", () => {
