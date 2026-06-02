@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { RotateCcw } from "lucide-react";
 import type { Post } from "@/types/fetcher";
+import { isNerd } from "@/lib/nerd";
+import { scorePost } from "@/lib/postScorer";
+import { parseTags, resumeRec } from "@/lib/recommendation";
 import { log } from "@/lib/log";
 import { TagSearchBar } from "./TagSearchBar";
 import { FeedControls } from "./FeedControls";
@@ -20,13 +24,16 @@ type Props = {
   setActive: (i: number) => void;
   onLike: (p: Post) => void;
   onSave: (p: Post) => void;
+  onRefresh: () => void;
 };
 
-export function Feed({ posts, idx, liked, saved, loading, searchError, setActive, onLike, onSave }: Props) {
+export function Feed({ posts, idx, liked, saved, loading, searchError, setActive, onLike, onSave, onRefresh }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const scrollLock = useRef(false);
+  const needScroll = useRef(true);
   const skeleton = !posts.length && loading && !searchError;
   const empty = !posts.length && !loading && searchError;
+  const nerd = isNerd();
 
   const snapTo = useCallback(
     (i: number) => {
@@ -40,6 +47,20 @@ export function Feed({ posts, idx, liked, saved, loading, searchError, setActive
     [posts.length, setActive, skeleton]
   );
 
+  useEffect(() => {
+    if (!posts.length) needScroll.current = true;
+  }, [posts.length]);
+
+  useEffect(() => {
+    if (skeleton || !posts.length || !needScroll.current) return;
+    const el = scroller.current;
+    if (!el) return;
+    needScroll.current = false;
+    scrollLock.current = true;
+    el.scrollTop = idx * el.clientHeight;
+    requestAnimationFrame(() => (scrollLock.current = false));
+  }, [skeleton, posts.length, idx]);
+
   const onScroll = () => {
     const el = scroller.current;
     if (!el || scrollLock.current || skeleton) return;
@@ -50,10 +71,24 @@ export function Feed({ posts, idx, liked, saved, loading, searchError, setActive
     }
   };
 
+  const cur = posts[idx];
+
   return (
     <div className="feed-layout h-screen w-full bg-black">
-      <header className="feed-header z-20 shrink-0 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur">
-        <TagSearchBar compact loading={loading} />
+      <header className="feed-header z-20 flex shrink-0 items-center gap-2 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur">
+        <div className="min-w-0 flex-1">
+          <TagSearchBar compact loading={loading} />
+        </div>
+        <button
+          type="button"
+          aria-label="Refresh feed"
+          title="Refresh feed"
+          disabled={loading}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+          onClick={onRefresh}
+        >
+          <RotateCcw size={16} className={loading ? "animate-spin" : ""} />
+        </button>
       </header>
       <div className="feed-shell relative min-h-0 flex-1">
         <div ref={scroller} className="feed-scroller h-full w-full" onScroll={onScroll}>
@@ -95,6 +130,12 @@ export function Feed({ posts, idx, liked, saved, loading, searchError, setActive
         {loading && posts.length > 0 && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-zinc-900/90 px-3 py-1 text-xs text-zinc-300">
             Loading…
+          </div>
+        )}
+        {nerd && cur && (
+          <div className="pointer-events-none absolute bottom-20 left-3 z-10 max-w-xs rounded-lg bg-black/75 px-2 py-1.5 font-mono text-[10px] text-emerald-400/90">
+            id={cur.id} idx={idx}/{posts.length} score={scorePost(cur, resumeRec()).toFixed(1)}{" "}
+            tags={parseTags(cur.tags).length}
           </div>
         )}
       </div>

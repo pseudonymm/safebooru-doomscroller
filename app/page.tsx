@@ -18,18 +18,21 @@ export default function Home() {
 
   return (
     <AppShell view={view} onView={setView}>
-      {(feed.phase === "boot" || view === "home") && (
-        <Feed
-          posts={feed.posts}
-          idx={feed.idx}
-          liked={feed.likedIds}
-          saved={feed.savedIds}
-          loading={feed.loading}
-          searchError={feed.searchError}
-          setActive={feed.setActive}
-          onLike={feed.onLike}
-          onSave={feed.onSave}
-        />
+      {feed.phase !== "boot" && (
+        <div className={view === "home" ? "h-full min-h-0" : "hidden"} aria-hidden={view !== "home"}>
+          <Feed
+            posts={feed.posts}
+            idx={feed.idx}
+            liked={feed.likedIds}
+            saved={feed.savedIds}
+            loading={feed.loading}
+            searchError={feed.searchError}
+            setActive={feed.setActive}
+            onLike={feed.onLike}
+            onSave={feed.onSave}
+            onRefresh={feed.refresh}
+          />
+        </div>
       )}
       {feed.phase !== "boot" && view === "saved" && <SavedPage />}
       {feed.phase !== "boot" && view === "stats" && <StatsPage />}

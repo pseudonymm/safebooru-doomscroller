@@ -6,11 +6,11 @@ import { FETCH_LIMIT, IGNORE_MS, PREFETCH } from "@/lib/config";
 import { FetchEmptyError } from "@/lib/fetchErrors";
 import { listPosts } from "@/lib/fetcher";
 import { mergePosts } from "@/lib/feedBuffer";
-import { fetchByTag, pickTag } from "@/lib/fetchRotator";
+import { fetchByQuery, pickQuery } from "@/lib/fetchRotator";
 import { log } from "@/lib/log";
 import { ignore, like, parseTags, resumeRec, trackSeen, unlike, type RecState } from "@/lib/recommendation";
-import { saveBuffer } from "@/lib/store/buffer";
-import { hasStoredFeed, loadLiked, syncFeed } from "@/lib/store";
+import { hasStoredFeed, loadBuffer, loadLiked, syncFeed } from "@/lib/store";
+import { loadIdx, saveIdx } from "@/lib/store/pos";
 import { loadSaved, toggleSaved } from "@/lib/store/saved";
 import { bumpStat } from "@/lib/store/stats";
 import { markVisited } from "@/lib/store/visited";
@@ -48,7 +48,7 @@ export const useFeed = () => {
     const q = watch.current;
     return q.length
       ? listPosts({ tags: andTagQuery(q), limit: FETCH_LIMIT })
-      : fetchByTag(pickTag(rec.current));
+      : fetchByQuery(pickQuery(rec.current));
   }, []);
 
   const refill = useCallback(async (from: number, buf: Post[]) => {
@@ -74,6 +74,20 @@ export const useFeed = () => {
     }
   }, [fetchBatch, sync]);
 
+  const restoreBuf = useCallback(
+    (buf: Post[]) => {
+      buf.forEach((p) => ids.current.add(p.id));
+      const i = Math.min(loadIdx(), Math.max(0, buf.length - 1));
+      setPosts(buf);
+      setIdx(i);
+      lastViewed.current = buf[i]?.id ?? -1;
+      setPhase("feed");
+      setLoading(false);
+      refill(i, buf);
+    },
+    [refill]
+  );
+
   const loadFiltered = useCallback(
     async (filterTags: string[], reset: boolean) => {
       watch.current = filterTags;
@@ -83,6 +97,7 @@ export const useFeed = () => {
         setPosts([]);
         ids.current.clear();
         setIdx(0);
+        saveIdx(0);
         lastViewed.current = -1;
       }
       try {
@@ -123,10 +138,11 @@ export const useFeed = () => {
       setPosts([]);
       ids.current.clear();
       setIdx(0);
+      saveIdx(0);
       lastViewed.current = -1;
       const batch = seeds.length
         ? await listPosts({ tags: orTagQuery(seeds), limit: FETCH_LIMIT })
-        : await fetchByTag(pickTag(rec.current));
+        : await fetchByQuery(pickQuery(rec.current));
       trackSeen(rec.current, batch.map((p) => parseTags(p.tags)));
       const buf = mergePosts([], batch, rec.current, ids.current);
       setPosts(buf);
@@ -154,22 +170,39 @@ export const useFeed = () => {
         return;
       }
 
-      saveBuffer([]);
       setPhase("feed");
       setLoading(true);
-      L.info("bootFresh");
+      L.info("boot");
 
       if (urlTags.length) {
         await loadFiltered(urlTags, true);
         return;
       }
+
+      const buf = loadBuffer();
+      if (buf.length) {
+        restoreBuf(buf);
+        return;
+      }
+
       const snap = resumeRec();
       const seeds = snap.seeds.length
         ? snap.seeds
         : [...snap.weights.entries()].slice(0, 3).map(([t]) => t);
       seeds.length ? await loadBootstrap(seeds) : setPhase("search");
     })();
-  }, [loadFiltered, loadBootstrap, refill]);
+  }, [loadFiltered, loadBootstrap, restoreBuf]);
+
+  const refresh = useCallback(async () => {
+    const q = watch.current;
+    setSearchError(null);
+    if (q.length) return loadFiltered(q, true);
+    const snap = resumeRec();
+    const seeds = snap.seeds.length
+      ? snap.seeds
+      : [...snap.weights.entries()].slice(0, 3).map(([t]) => t);
+    seeds.length ? await loadBootstrap(seeds) : setPhase("search");
+  }, [loadFiltered, loadBootstrap]);
 
   const onLike = useCallback(
     (p: Post) => {
@@ -191,19 +224,16 @@ export const useFeed = () => {
     [sync]
   );
 
-  const onSave = useCallback(
-    (p: Post) => {
-      const added = toggleSaved(p);
-      setSavedIds((s) => {
-        const n = new Set(s);
-        added ? n.add(p.id) : n.delete(p.id);
-        return n;
-      });
-      if (added) bumpStat("saved");
-      L.info("save", { id: p.id, added });
-    },
-    []
-  );
+  const onSave = useCallback((p: Post) => {
+    const added = toggleSaved(p);
+    setSavedIds((s) => {
+      const n = new Set(s);
+      added ? n.add(p.id) : n.delete(p.id);
+      return n;
+    });
+    if (added) bumpStat("saved");
+    L.info("save", { id: p.id, added });
+  }, []);
 
   const leavePost = useCallback((prev: number, forward: boolean) => {
     clearTimeout(dwellT.current);
@@ -239,6 +269,7 @@ export const useFeed = () => {
       if (next === idx || next < 0 || next >= posts.length) return;
       leavePost(idx, next > idx);
       setIdx(next);
+      saveIdx(next);
     },
     [idx, posts.length, leavePost]
   );
@@ -257,5 +288,17 @@ export const useFeed = () => {
     return () => clearTimeout(dwellT.current);
   }, [idx, phase, armDwell]);
 
-  return { phase, posts, idx, loading, searchError, setActive, onLike, onSave, likedIds, savedIds };
+  return {
+    phase,
+    posts,
+    idx,
+    loading,
+    searchError,
+    setActive,
+    onLike,
+    onSave,
+    likedIds,
+    savedIds,
+    refresh,
+  };
 };

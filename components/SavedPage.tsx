@@ -1,15 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Post } from "@/types/fetcher";
-import { loadSaved } from "@/lib/store/saved";
+import { like, parseTags, resumeRec, unlike, type RecState } from "@/lib/recommendation";
+import { loadLiked, saveLiked } from "@/lib/store/liked";
+import { loadSaved, saveSaved } from "@/lib/store/saved";
+import { bumpStat } from "@/lib/store/stats";
+import { SavedPostDialog } from "./SavedPostDialog";
 
 export function SavedPage() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [sel, setSel] = useState<Post | null>(null);
+  const [liked, setLiked] = useState<Set<number>>(() => loadLiked());
+  const rec = useRef<RecState>(resumeRec());
 
-  useEffect(() => {
-    setPosts(loadSaved());
+  useEffect(() => setPosts(loadSaved()), []);
+
+  const onLike = useCallback((p: Post) => {
+    const tags = parseTags(p.tags);
+    const s = liked;
+    if (s.has(p.id)) {
+      s.delete(p.id);
+      unlike(rec.current, tags);
+      bumpStat("liked", -1);
+    } else {
+      s.add(p.id);
+      like(rec.current, tags);
+      bumpStat("liked");
+    }
+    saveLiked(s);
+    setLiked(new Set(s));
+  }, [liked]);
+
+  const onRemove = useCallback((p: Post) => {
+    const next = loadSaved().filter((x) => x.id !== p.id);
+    saveSaved(next);
+    setPosts(next);
+    setSel(null);
   }, []);
 
   return (
@@ -23,12 +50,11 @@ export function SavedPage() {
       ) : (
         <div className="saved-grid">
           {posts.map((p) => (
-            <a
+            <button
               key={p.id}
-              href={p.file_url || p.sample_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              type="button"
               className="saved-thumb group relative aspect-square overflow-hidden bg-zinc-900"
+              onClick={() => setSel(p)}
             >
               <img
                 className="h-full w-full object-cover transition group-hover:opacity-90"
@@ -36,12 +62,18 @@ export function SavedPage() {
                 alt=""
                 loading="lazy"
               />
-              <span className="absolute top-2 right-2 rounded-md bg-black/60 p-1 opacity-0 transition group-hover:opacity-100">
-                <ExternalLink size={14} />
-              </span>
-            </a>
+            </button>
           ))}
         </div>
+      )}
+      {sel && (
+        <SavedPostDialog
+          post={sel}
+          liked={liked.has(sel.id)}
+          onLike={() => onLike(sel)}
+          onRemove={() => onRemove(sel)}
+          onClose={() => setSel(null)}
+        />
       )}
     </div>
   );
